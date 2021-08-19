@@ -10,22 +10,39 @@ import java.util.*;
 
 class TCPServer { 
 
-	private static Hashtable<String, String> loginDetails = new Hashtable<String, String>();
+	public static Hashtable<String, Hashtable<String, String>> loginDetails = new Hashtable<String, Hashtable<String, String>>();
     public static void main(String argv[]) throws Exception 
     { 
 		/* Read allowed user names and passwords from users.txt file into hashtable */		
-		File file = new File("C:\\Users\\Admin\\Documents\\COMPSYS 725\\Assignment1\\Code\\PETER-CODE\\users.txt");
-		Scanner sc = new Scanner(file);
+		BufferedReader csvReader = new BufferedReader(new FileReader(".\\users.txt"));
 
-		while(sc.hasNext()){
-			String user = sc.next();
-			String pass = sc.next();
+		// variables to be used for filling loginDetails Dict
+		String line;
+		String user;
+		String pass;
+		String acct;
 
-			loginDetails.put(user, pass);
+		while((line = csvReader.readLine()) != null){
+			StringTokenizer tokenizedLine = new StringTokenizer(line);
+			Hashtable<String, String> ht = new Hashtable<String, String>();
+			
+			user = tokenizedLine.nextToken(",");
+			acct = tokenizedLine.nextToken(","); 
+			pass = tokenizedLine.nextToken(",");
+
+			if(loginDetails.containsKey(user)){
+				ht = loginDetails.get(user);
+				ht.put(acct, pass);
+			}
+			else{
+				ht.put(acct, pass);
+			}
+
+			loginDetails.put(user, ht);
 		}
-		sc.close();
 		System.out.print(loginDetails);
 		
+		/* START SERVER */
 		System.out.print("Server Started\n");
 		/*start welcome socket listening on port 6789*/
 		ServerSocket welcomeSocket = new ServerSocket(6789); 
@@ -50,6 +67,7 @@ class TCPServer {
 	private static class Handler implements Runnable{
 		private final Socket client;
 		private int loggedIn;
+		private String userName;
 		private String ResponseCode;
 		private String ResponseMessage;
 		private BufferedReader infromClient;
@@ -81,74 +99,89 @@ class TCPServer {
 					/*Read user input*/
 					String message = infromClient.readLine();
 					/*Format into command and store <COMMAND> and <args> in string array*/
-					String[] command = message.split(" ");
-					if(command[1] == null){
-						command[1] = "null";
-					}
-					System.out.println(command[1]);
+					StringTokenizer command = new StringTokenizer(message);
+					if(command.hasMoreTokens()){
+						switch(command.nextToken()){
+							case "USER":
+								if(command.hasMoreTokens()){
+									userName = command.nextToken();
 
-					switch(command[0]){
-						case "USER":
-							if(loginDetails.containsKey(command[1])){
-								String password = loginDetails.get(command[1]);
-								if(password == "null"){
-									ResponseCode = "!";
-									ResponseMessage = command[0];
-									ResponseMessage.concat(" logged in");
-									break;
+									if(loginDetails.containsKey(userName)){
+										String password = loginDetails.get(userName).get("");
+										System.out.print(loginDetails.get(userName));
+										System.out.print(password);
+
+										if(password == ""){
+											ResponseCode = "!";
+											ResponseMessage = userName; 
+											ResponseMessage = ResponseMessage.concat(" logged in");
+											break;
+										}
+										else{
+											ResponseCode = "+";
+											ResponseMessage = "User-id valid, send account and password";
+											break;
+										}
+
+									}
+									else{
+										ResponseCode = "-";
+										ResponseMessage = "Invalid user-id, try again";
+										break;
+									}
 								}
 								else{
-									ResponseCode = "+";
-									ResponseMessage = "User-id valid, send account and password";
+									ResponseCode = "-";
+									ResponseMessage = "Invalid user-id, try again";
 									break;
 								}
 
-							}
-							else{
-								ResponseCode = "-";
-								ResponseMessage = "Invalid user-id, try again";
+							case "ACTT":
 								break;
-							}
+							case "PASS":
+								break;
+							case "TYPE":
+								break;
+							case "LIST":
+								break;
+							case "CDIR":
+								break;
+							case "KILL":
+								break;
+							case "NAME":
+								break;
+							case "DONE":
+								ResponseCode = "+";
+								ResponseMessage = "Closing connection";
+								this.client.close();
+								break;
+							case "RETR":
+								break;
+							case "SEND":
+								break;
+							case "STOP":
+								break;
+							case "STOR":
+								break;
+							case "NEW":
+								break;
+							case "OLD":
+								break;
+							case "APP":
+								break;
+							case "SIZE":
+								break;
+							default:
+								ResponseCode = "-";
+								ResponseMessage = "Command invalid";
 
-						case "ACTT":
-							break;
-						case "PASS":
-							break;
-						case "TYPE":
-							break;
-						case "LIST":
-							break;
-						case "CDIR":
-							break;
-						case "KILL":
-							break;
-						case "NAME":
-							break;
-						case "DONE":
-							ResponseCode = "+";
-							ResponseMessage = "Closing connection";
-							this.client.close();
-							break;
-						case "RETR":
-							break;
-						case "SEND":
-							break;
-						case "STOP":
-							break;
-						case "STOR":
-							break;
-						case "NEW":
-							break;
-						case "OLD":
-							break;
-						case "APP":
-							break;
-						case "SIZE":
-							break;
-						default:
-							ResponseCode = "-";
-							ResponseMessage = "Command invalid";
-					}	
+						}	
+					}
+					else{
+						ResponseCode = "-";
+						ResponseMessage = "Command invalid";
+
+					}
 
 					if (ResponseCode == "!"){
 						loggedIn = 1;
