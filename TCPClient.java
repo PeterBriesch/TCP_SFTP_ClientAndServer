@@ -34,13 +34,16 @@ class TCPClient {
         while(true){
 
             sentence = inFromUser.readLine(); 
-        
-            outToServer.writeBytes(sentence + '\n'); 
+            outToServer.writeBytes(sentence + "\n"); 
             outToServer.flush();
             
             Response = inFromServer.readLine();
-
-            System.out.println(Response); 
+            System.out.println(Response);
+            while(inFromServer.ready()){
+                Response = inFromServer.readLine();
+                System.out.println(Response); 
+            }
+            
 
             if(sentence == "DONE"){
                 break;
