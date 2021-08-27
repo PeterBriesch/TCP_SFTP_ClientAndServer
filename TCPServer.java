@@ -75,12 +75,15 @@ class TCPServer {
 		private String responseMessage;
 		private BufferedReader infromClient;
 		private DataOutputStream outToClient;
+		private String transType;
+
 		
 		/* client socket is passed off to handler */
 		public Handler(Socket socket){
 			this.client = socket;
 			this.loggedIn = false;
 			this.wrkDirectory = System.getProperty("user.dir");
+			System.out.println(wrkDirectory);
 		}
 
 		public void run(){
@@ -123,6 +126,7 @@ class TCPServer {
 									break;
 								
 								case "TYPE":
+									TYPE(command);
 									break;
 
 								case "LIST":
@@ -180,20 +184,11 @@ class TCPServer {
 								case "RETR":
 									RETR(command);
 									break;
-								case "SEND":
-									break;
-								case "STOP":
-									break;
+								
 								case "STOR":
+									STOR(command);
 									break;
-								case "NEW":
-									break;
-								case "OLD":
-									break;
-								case "APP":
-									break;
-								case "SIZE":
-									break;
+								
 								default:
 									responseCode = "-";
 									responseMessage = "Command invalid";
@@ -361,6 +356,38 @@ class TCPServer {
 			}
 		}
 
+		public void TYPE(StringTokenizer command){
+			if(command.hasMoreTokens()){
+				switch(command.nextToken()){
+					case "A":
+						responseCode = "+";
+						responseMessage = "Using Ascii mode";
+						transType = "Ascii";
+						break;
+					case "B":
+						responseCode = "+";
+						responseMessage = "Using Binary mode";
+						transType = "Binary";
+						break;
+					case "C":
+						responseCode = "+";
+						responseMessage = "Continuous";
+						transType = "Cont";
+						break;
+					default:
+						responseCode = "-";
+						responseMessage = "Type not valid";
+						break;
+				}
+				
+			}else{
+				responseCode = "+";
+				responseMessage = "Using Binary mode";
+				transType = "Binary";
+			}
+			return;
+		}
+
 		public void LIST(StringTokenizer command){
 			//Read the given format for listing
 			String format;
@@ -441,6 +468,7 @@ class TCPServer {
 				wrkDirectory = newDirectory;
 				responseCode = "!";
 				responseMessage = "Changed working dir to " + wrkDirectory;
+				System.out.println(wrkDirectory);
 			}
 			else{
 				responseCode = "-";
@@ -528,22 +556,67 @@ class TCPServer {
 			return;
 		}
 
-		//TODO complete this function
 		public void RETR(StringTokenizer command){
-			File sendFile;
+			String message;
 			//Check for NULL input
 			if(command.hasMoreTokens()){
-				sendFile = new File(command.nextToken());
-				//Check if file exists
-				if(sendFile.exists()){
-					responseCode = "";
-					//Convert byte size of file to ascii
-					long fileSize = sendFile.length();
-					responseMessage = String.valueOf(fileSize);
-					return;
+				//Read file into BufferedInputStream
+				String filePath = wrkDirectory + "\\" + command.nextToken();
+				File sendFile = new File(filePath);
+				try{
+					BufferedInputStream fileIn = new BufferedInputStream(new FileInputStream(sendFile));
+					OutputStream fileOut = client.getOutputStream();
+
+					//Check if file exists
+					if(sendFile.exists()){
+						responseCode = "";
+						//Convert byte size of file to ascii
+						long fileSize = sendFile.length();
+						responseMessage = String.valueOf(fileSize);
+						//send message to client
+						outToClient.writeBytes(responseCode + responseMessage + "\n");
+						outToClient.flush();
+						//Wait for reply from client
+						message = infromClient.readLine();
+						/*Format into command and store <COMMAND> and <args> in string array*/
+						command = new StringTokenizer(message);
+
+						//Check for null input
+						if(command.hasMoreTokens()){
+							switch(command.nextToken()){
+								case "STOP":
+									responseCode = "+";
+									responseMessage = "ok, RETR aborted";
+									
+									return;
+								case "SEND":
+									//Read file into buffer
+									byte[] buffer = new byte[(int)fileSize];
+									fileIn.read(buffer, 0, buffer.length);
+									fileOut.write(buffer,0,buffer.length);
+									fileOut.flush();
+									return;
+								default:
+									responseCode = "-";
+									responseMessage = "Something went wrong";
+									return;
+
+							}
+						}
+						else{
+							responseCode = "-";
+							responseMessage = "Null input try again";
+						}
+						return;
+					}
 				}
+				catch(IOException e){
+					e.printStackTrace();
+				}
+				
 				responseCode = "-";
 				responseMessage = "File doesn't exist";
+				
 			}
 			else{
 				responseCode = "-";
@@ -554,6 +627,179 @@ class TCPServer {
 
 		//TODO implement function
 		public void STOR(StringTokenizer command){
+			File storFile;
+			String fileName;
+			String fileType;
+			int fileSize;
+			String message;
+			BufferedOutputStream fos;
+			//Check for null input
+			if(command.hasMoreTokens()){
+				fileType = command.nextToken();
+				//Check if file-spec was specified
+				if(command.hasMoreTokens()){
+					fileName = command.nextToken();
+					storFile = new File(wrkDirectory + "\\" + fileName);
+					//Check if file exists
+					if(storFile.exists()){
+						if (fileType.equals("NEW")){
+							responseCode = "+";
+							responseMessage = "File exists, will create new generation of file";
+						}else if (fileType.equals("OLD")){
+							responseCode = "+";
+							responseMessage = "Will write over old file";
+						}else if (fileType.equals("APP")){
+							responseCode = "+";
+							responseMessage = "Will append to file";
+						}else{
+							responseCode = "-";
+							responseMessage = "invalid mode, aborting STOR";
+							return;
+						}
+					}
+					else{
+						responseCode = "+";
+						responseMessage = "File does not exist, will create new file";
+						
+					}
+
+
+
+					try{
+						//send message to client
+						outToClient.writeBytes(responseCode + responseMessage + "\n");
+						outToClient.flush();
+						//Wait for reply from client
+						message = infromClient.readLine();
+						/*Format into command and store <COMMAND> and <args> in string array*/
+						command = new StringTokenizer(message);
+
+						//Check Command for SIZE
+						if(command.nextToken().equals("SIZE")){
+							fileSize = Integer.parseInt(command.nextToken());
+						}
+						else{
+							responseCode = "-";
+							responseMessage = "Size not specified, aborting STOR";
+							return;
+						}
+
+						//Check if there is space available
+						//String[] dir = wrkDirectory.split("\\");
+						File partition = new File("D:");
+						if(partition.getUsableSpace() < fileSize){
+							responseCode = "-";
+							responseMessage = "Not enough space, don't send it";
+							return;
+						}
+						else{
+							responseCode = "+";
+							responseMessage = "ok, waiting for file";
+						}
+
+						//send message to client
+						outToClient.writeBytes(responseCode + responseMessage + "\n");
+						outToClient.flush();
+					
+						//File output stream for reading data from client into file
+						
+						int count;
+						int current;
+						byte[] buffer = new byte[fileSize];
+						//Require DataInputStream for reading file from client
+						DataInputStream in = new DataInputStream(new BufferedInputStream(client.getInputStream()));
+						if(storFile.exists()){
+							switch (fileType){
+								case "NEW":
+									//Create new file generation
+									count = 0;
+									while(storFile.exists()){
+										storFile = new File(wrkDirectory + "\\" + "(" + count + ")" + fileName);
+									}
+									//create file out put stream with new file name
+									fos = new BufferedOutputStream(new FileOutputStream(storFile));
+
+									//Read from input stream to buffer starting from position 0 in the input stream 
+									count = in.read(buffer, 0, fileSize);
+									//Current is used to store current position in buffer we are writing to mainly useful for very large files that don't finish in 1 iteration
+									current = count;
+									while((count = in.read(buffer, current, (fileSize-current))) > 0){
+									    current += count;
+									    System.out.println("File " + fileName + " downloaded (" + current + " bytes read)");
+									}
+
+									//Write to File using FileOutputStream
+									fos.write(buffer, 0, fileSize);
+									fos.flush();
+
+									break;
+								case "OLD":
+									fos = new BufferedOutputStream(new FileOutputStream(storFile));
+									//Read from input stream to buffer starting from position 0 in the input stream 
+									count = in.read(buffer, 0, fileSize);
+									//Current is used to store current position in buffer we are writing to mainly useful for very large files that don't finish in 1 iteration
+									current = count;
+									while((count = in.read(buffer, current, (fileSize-current))) > 0){
+									    current += count;
+									    System.out.println("File " + fileName + " downloaded (" + current + " bytes read)");
+									}
+
+									//Write to File using FileOutputStream
+									fos.write(buffer, 0, fileSize);
+									fos.flush();
+									break;
+								case "APP":
+									FileOutputStream afos = new FileOutputStream(storFile, true);
+									//Read from input stream to buffer starting from position 0 in the input stream 
+									count = in.read(buffer, 0, fileSize);
+									//Current is used to store current position in buffer we are writing to mainly useful for very large files that don't finish in 1 iteration
+									current = count;
+									while((count = in.read(buffer, current, (fileSize-current))) > 0){
+									    current += count;
+									    System.out.println("File " + fileName + " downloaded (" + current + " bytes read)");
+									}
+
+									//Write to File using FileOutputStream from the last position in the file
+									afos.write(buffer);
+									afos.flush();
+									break;
+								default:
+									responseCode = "-";
+									responseMessage = "invalid mode";
+									break;
+							}
+						}
+						else{
+							fos = new BufferedOutputStream(new FileOutputStream(storFile));
+							//Read from input stream to buffer starting from position 0 in the input stream 
+							count = in.read(buffer, 0, fileSize);
+							//Current is used to store current position in buffer we are writing to mainly useful for very large files that don't finish in 1 iteration
+							current = count;
+							while((count = in.read(buffer, current, (fileSize-current))) > 0){
+							    current += count;
+							    System.out.println("File " + fileName + " downloaded (" + current + " bytes read)");
+							}
+
+							//Write to File using FileOutputStream
+							fos.write(buffer, 0, fileSize);
+							fos.flush();
+						}
+						responseCode = "+";
+						responseMessage = "Saved " + fileName;
+						return;
+					}catch(IOException e){
+						StringWriter error = new StringWriter();
+						e.printStackTrace(new PrintWriter(error));
+						responseCode = "-";
+						responseMessage = "Couldn't save because " + error.toString();
+						return;
+					}
+				}
+			}
+			
+			responseCode = "-";
+			responseMessage = "Null input, try again";
+			
 			return;
 		}
 

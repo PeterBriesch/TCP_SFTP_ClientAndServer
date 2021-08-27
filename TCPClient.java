@@ -6,6 +6,8 @@
 
 import java.io.*; 
 import java.net.*; 
+import java.util.*;
+
 class TCPClient { 
     private static String IP = "localhost";
     private static int port = 6789;
@@ -13,7 +15,13 @@ class TCPClient {
     public static void main(String argv[]) throws Exception 
     { 
         String sentence; 
-        String Response; 
+        String Response = null; 
+        StringTokenizer tokenizedSentence = null;
+        String fileName = null;
+        int fileSize;
+        String prevCommand = "NONE";
+        BufferedOutputStream fileOut = null;
+
 	 
         Socket clientSocket = new Socket(IP, port); 
         
@@ -32,22 +40,107 @@ class TCPClient {
         System.out.print(initMsg+ "\n");
 
         while(true){
+            //read input from user then send input to server
+            sentence = inFromUser.readLine();
 
-            sentence = inFromUser.readLine(); 
             outToServer.writeBytes(sentence + "\n"); 
             outToServer.flush();
-            
-            Response = inFromServer.readLine();
-            System.out.println(Response);
-            while(inFromServer.ready()){
-                Response = inFromServer.readLine();
-                System.out.println(Response); 
-            }
-            
 
-            if(sentence == "DONE"){
-                break;
+            /*          Process for RETR command            */
+            //Tokenize users input for further processing
+            tokenizedSentence = new StringTokenizer(sentence);
+            String command;
+            //check for null input from user
+            if(tokenizedSentence.hasMoreTokens()){
+                command = tokenizedSentence.nextToken();
+
+                //Check if the command was a Retrieve command
+                if (command.equals("RETR")){
+                    //check for null input
+                    if(tokenizedSentence.hasMoreTokens()){
+                        //Store filename of file to be retrieved
+                        fileName = tokenizedSentence.nextToken();
+                        
+                    } 
+                }
+                else if(command.equals("STOR")){
+                    //check for null input 
+                    if(tokenizedSentence.hasMoreTokens()){
+                        //store filename of file to be retrieved
+                        tokenizedSentence.nextToken();
+                        fileName = tokenizedSentence.nextToken();
+                    }
+                    File fileToSend = new File(fileName);
+                    //Check if file exists
+                    if(fileToSend.exists()){
+                        Response = inFromServer.readLine();
+                        System.out.println(Response);
+                        sentence = "SIZE " + fileToSend.length() + "\n";
+                        outToServer.writeBytes(sentence);
+                        Response = inFromServer.readLine();
+                        System.out.println(Response);
+                        BufferedInputStream fileIn = new BufferedInputStream(new FileInputStream(fileToSend));
+                        OutputStream os = clientSocket.getOutputStream();
+                        //Read file into buffer
+                        byte[] buffer = new byte[(int)fileToSend.length()];
+                        fileIn.read(buffer, 0, buffer.length);
+                        os.write(buffer,0,buffer.length);
+
+                    }else{
+                        inFromServer.readLine();
+                        outToServer.writeBytes("NULL\n");
+                        System.out.println("File " + fileName + " doesn't exist");
+                    }
+                    
+
+
+
+                }
+
+                //Check if the user wants to continue with RETR command
+                if(command.equals("SEND") && prevCommand.equals("RETR")){
+                    //Get the fileSize from server response
+                    fileSize = Integer.parseInt(Response);
+
+                    //Initialize FileOutputStream then begin reading bytes from server
+                    fileOut = new BufferedOutputStream(new FileOutputStream(fileName));
+                    int count;
+                    int current;
+                    byte[] buffer = new byte[fileSize];
+                    //Require DataInputStream for sending files
+                    DataInputStream in = new DataInputStream(new BufferedInputStream(clientSocket.getInputStream()));
+
+                    //Read from input stream to buffer starting from position 0 in the input stream 
+                    count = in.read(buffer, 0, fileSize);
+                    //Current is used to store current position in buffer we are writing to mainly useful for very large files that don't finish in 1 iteration
+                    current = count;
+                    while((count = in.read(buffer, current, (fileSize-current))) > 0){
+                        current += count;
+                        System.out.println("File " + fileName + " downloaded (" + current + " bytes read)");
+                    }
+
+                    //Write to File using FileOutputStream
+                    fileOut.write(buffer, 0, fileSize);
+                    fileOut.flush();
+                    
+                }
+                else if (command.equals("DONE")){
+                    break;
+                }else{
+                    Response = inFromServer.readLine();
+                    System.out.println(Response);
+                    while(inFromServer.ready()){
+                        Response = inFromServer.readLine();
+                        System.out.println(Response); 
+                    }
+                }
+
+                prevCommand = command;
             }
+            else{command = "NULL";}
+
+
+            
         
         }	
         clientSocket.close();
