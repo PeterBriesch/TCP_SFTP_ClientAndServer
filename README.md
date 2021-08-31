@@ -13,6 +13,7 @@ Server is listening on port 6789 and client connect using a TCP connection. In o
 
 ## Test Cases:
 ### Full functionality test case
+replace yourWorkingDirectory with whatever directory you have put the files in
 Commands can be copied and right clicking in command prompt will execute commands sequentially for quick testing
 test case on line 37 and 39 require the user to open the txt file to see changes
 ```
@@ -22,16 +23,16 @@ PASS pumpkin
 TYPE B
 LIST V 
 LIST F 
-CDIR D:\COMPSYS725\Assignment1\TCP_SFTP_ClientAndServer\testDirectory
+CDIR yourWorkingDirectory\testDirectory
 LIST F 
 NAME send.txt
 TOBE newSend.txt (rename send.txt)
 LIST F 
 RETR newSend.txt
 SEND
-CDIR D:\COMPSYS725\Assignment1\TCP_SFTP_ClientAndServer
+CDIR yourWorkingDirectory
 LIST F 
-CDIR D:\COMPSYS725\Assignment1\TCP_SFTP_ClientAndServer\testDirectory
+CDIR yourWorkingDirectory\testDirectory
 STOR NEW newSend.txt
 LIST F 
 STOR APP newSend.txt
