@@ -68,33 +68,42 @@ class TCPClient {
                     if(tokenizedSentence.hasMoreTokens()){
                         //store filename of file to be retrieved
                         tokenizedSentence.nextToken();
-                        fileName = tokenizedSentence.nextToken();
+                        try{
+                            fileName = tokenizedSentence.nextToken();
+                        }catch(NoSuchElementException e){
+                            //read lines from server and print it out
+                            Response = inFromServer.readLine();
+                            System.out.println(Response);
+                            continue;
+                        }
                     }
                     File fileToSend = new File(fileName);
                     //Check if file exists
                     if(fileToSend.exists()){
+                        //read response from server
                         Response = inFromServer.readLine();
                         System.out.println(Response);
+                        //send the size of the file to the server
                         sentence = "SIZE " + fileToSend.length() + "\n";
                         outToServer.writeBytes(sentence);
                         Response = inFromServer.readLine();
                         System.out.println(Response);
+                        //Open the file to be read into buffer
                         BufferedInputStream fileIn = new BufferedInputStream(new FileInputStream(fileToSend));
                         OutputStream os = clientSocket.getOutputStream();
                         //Read file into buffer
                         byte[] buffer = new byte[(int)fileToSend.length()];
                         fileIn.read(buffer, 0, buffer.length);
+                        //Send file to server on OutputStream
                         os.write(buffer,0,buffer.length);
+                        os.flush();
+                        fileIn.close();
 
                     }else{
                         inFromServer.readLine();
                         outToServer.writeBytes("NULL\n");
                         System.out.println("File " + fileName + " doesn't exist");
                     }
-                    
-
-
-
                 }
 
                 //Check if the user wants to continue with RETR command
@@ -122,11 +131,13 @@ class TCPClient {
                     //Write to File using FileOutputStream
                     fileOut.write(buffer, 0, fileSize);
                     fileOut.flush();
+                    fileOut.close();
                     
                 }
                 else if (command.equals("DONE")){
                     break;
                 }else{
+                    //read lines from server and print it out
                     Response = inFromServer.readLine();
                     System.out.println(Response);
                     while(inFromServer.ready()){
@@ -137,11 +148,9 @@ class TCPClient {
 
                 prevCommand = command;
             }
-            else{command = "NULL";}
-
-
-            
-        
+            else{
+                command = "NULL";
+            }
         }	
         clientSocket.close();
     } 

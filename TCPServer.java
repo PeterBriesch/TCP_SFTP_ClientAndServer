@@ -10,6 +10,9 @@ import java.util.*;
 
 class TCPServer { 
 
+	//all loginDetails are stored in Hashtable loginDetails
+	//associated accounts and passwords are stored within 
+	//the Hashtable as another Hashtable for easy lookup
 	public static Hashtable<String, Hashtable<String, String>> loginDetails = new Hashtable<String, Hashtable<String, String>>();
 	
     public static void main(String argv[]) throws Exception 
@@ -23,6 +26,7 @@ class TCPServer {
 		String pass;
 		String acct;
 
+		//read users, passwords and accounts from users.txt
 		while((line = csvReader.readLine()) != null){
 			String[] tokenizedLine = line.split(",");
 			Hashtable<String, String> ht = new Hashtable<String, String>();
@@ -64,7 +68,8 @@ class TCPServer {
 		}
    } 
 
-	/* Handler class used for multithreading and handling multiple clients */
+	/* Handler class used for multithreading and handling multiple clients 
+	   This should definately be moved to a seperate file for cleaner code */
 	private static class Handler implements Runnable{
 		private final Socket client;
 		private boolean loggedIn;
@@ -116,7 +121,6 @@ class TCPServer {
 								case "USER":
 									USER(command);
 									break;
-
 								case "ACCT":
 									ACCT(command);
 									break;
@@ -172,6 +176,7 @@ class TCPServer {
 											responseMessage = "File wasn't renamed because command invalid";
 										}
 									}
+									reName = null;
 
 									break;
 								case "DONE":
@@ -481,15 +486,20 @@ class TCPServer {
 		public void KILL(StringTokenizer command){
 			//Check for null input
 			if(command.hasMoreTokens()){
-				File file = new File(command.nextToken());
+				File file = new File(wrkDirectory + "\\" +command.nextToken());
 				
 				//Check if file exists
 				if(file.exists()){
 					//Delete the file
-					file.delete();
-					responseCode = "+";
-					responseMessage = file.getName() + " deleted";
-					return;
+					if(file.delete()){
+						responseCode = "+";
+						responseMessage = file.getName() + " deleted";
+						return;
+					}else{
+						responseCode = "-";
+						responseMessage = "Not deleted";
+						return;
+					}
 				}
 
 				responseCode = "-";
@@ -511,7 +521,7 @@ class TCPServer {
 			public Name(StringTokenizer command){
 				//Check for Null input 
 				if(command.hasMoreTokens()){
-					File file = new File(command.nextToken());
+					File file = new File(wrkDirectory + "\\" +command.nextToken());
 					//Check if file exists
 					if(file.exists()){
 						responseCode = "+";
@@ -531,7 +541,7 @@ class TCPServer {
 
 			public void TOBE(String name){
 				//create new file name 
-				File newFile = new File(name);
+				File newFile = new File(wrkDirectory + "\\" + name);
 				String oldFileName = fileName.getName();
 				if(newFile.exists()){
 					responseCode = "-";
@@ -595,6 +605,7 @@ class TCPServer {
 									fileIn.read(buffer, 0, buffer.length);
 									fileOut.write(buffer,0,buffer.length);
 									fileOut.flush();
+									fileIn.close();
 									return;
 								default:
 									responseCode = "-";
@@ -638,8 +649,15 @@ class TCPServer {
 				fileType = command.nextToken();
 				//Check if file-spec was specified
 				if(command.hasMoreTokens()){
-					fileName = command.nextToken();
+					try{
+						fileName = command.nextToken();
+					}catch(NullPointerException e){
+						responseCode = "-";
+						responseMessage = "Command invalid";
+						return;
+					}
 					storFile = new File(wrkDirectory + "\\" + fileName);
+					
 					//Check if file exists
 					if(storFile.exists()){
 						if (fileType.equals("NEW")){
@@ -715,6 +733,7 @@ class TCPServer {
 									count = 0;
 									while(storFile.exists()){
 										storFile = new File(wrkDirectory + "\\" + "(" + count + ")" + fileName);
+										count += 1;
 									}
 									//create file out put stream with new file name
 									fos = new BufferedOutputStream(new FileOutputStream(storFile));
@@ -731,7 +750,7 @@ class TCPServer {
 									//Write to File using FileOutputStream
 									fos.write(buffer, 0, fileSize);
 									fos.flush();
-
+									fos.close();
 									break;
 								case "OLD":
 									fos = new BufferedOutputStream(new FileOutputStream(storFile));
@@ -747,6 +766,7 @@ class TCPServer {
 									//Write to File using FileOutputStream
 									fos.write(buffer, 0, fileSize);
 									fos.flush();
+									fos.close();
 									break;
 								case "APP":
 									FileOutputStream afos = new FileOutputStream(storFile, true);
@@ -762,6 +782,7 @@ class TCPServer {
 									//Write to File using FileOutputStream from the last position in the file
 									afos.write(buffer);
 									afos.flush();
+									afos.close();
 									break;
 								default:
 									responseCode = "-";
@@ -783,9 +804,10 @@ class TCPServer {
 							//Write to File using FileOutputStream
 							fos.write(buffer, 0, fileSize);
 							fos.flush();
+							fos.close();
 						}
 						responseCode = "+";
-						responseMessage = "Saved " + fileName;
+						responseMessage = "Saved " + fileName;	
 						return;
 					}catch(IOException e){
 						StringWriter error = new StringWriter();
